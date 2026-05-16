@@ -70,3 +70,4 @@ page = SolaraViz(
     name="University Revenue Model",
 )
 page
+# I still need to add data-collection visualizations

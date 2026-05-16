@@ -4,7 +4,7 @@ import numpy as np
 from mesa.experimental.continuous_space import ContinuousSpaceAgent
 
 class Student(ContinuousSpaceAgent):
-    ## Define initiation. Inherit space and model properties from parent class
+    ## Student agents are initialized with wealth, merit, and information
     def __init__(
         self,
         model,
@@ -21,6 +21,8 @@ class Student(ContinuousSpaceAgent):
         self.offers = []
         self.decision = None
         self.label = 'S'
+        # Student information is determined by the parameter and, if applicable,
+        # randomly assigned
         if self.model.information == "No information":
             self.information = False
         elif self.model.information == "Perfect information":
@@ -29,10 +31,14 @@ class Student(ContinuousSpaceAgent):
             self.information = self.model.rng.random() > 0.5
 
     def accept(self):
+        # Students consider all offers and choose the highest utility offer
         if not self.offers or self.decision:
             return
         best_offer = (None, 0)
         for offer in self.offers:
+            # If students are assigned to have financial information, they
+            # cancluate tuition based on their actual paid amount rather than
+            # the university sticker price.
             if self.information:
                 real_tuition = min(self.wealth, offer.tuition)
             else:
@@ -48,12 +54,17 @@ class Student(ContinuousSpaceAgent):
                          best_offer[0].position[1]+self.model.rng.uniform(-0.05, 0.05))
     
     def reset(self):
+        # After each step, students reset to having no offers and no decision.
+        # Students could also re-calculate their merit and wealth values if desired
         #self.merit = self.model.rng.uniform(0,1)
         #self.wealth = self.model.rng.uniform(0,1)
         self.offers = []
         self.decision = None
 
 class University(ContinuousSpaceAgent):
+    ## University agents are initialized with tuition and prestige.
+    # Currently prestige and tuition are initialized as the same value, but this
+    # can be adjusted.
     def __init__(
             self,
             model,
@@ -71,24 +82,26 @@ class University(ContinuousSpaceAgent):
         self.total_revenue = 0
 
     def offer(self):
+        # Universities send offers to the students with the highest expected revenue
         ranked_student_list = []
         offer_count = 0
+        # Student expected revenues are calculated
         for student in self.model.agents_by_type[Student]:
             expected_revenue = min(student.wealth, self.tuition) + student.merit * self.prestige * self.model.donate
-            if (student.merit > self.prestige and student.wealth > self.tuition):
-                student.offers.append(self)
-                offer_count += 1
-            else:
-                ranked_student_list.append((expected_revenue, student.merit, student))
+            ranked_student_list.append((expected_revenue, student.merit, student))
             
         ranked_student_list.sort()
         i = 0
+        # Until the capacity is reached, students are sent offers in order of
+        # expected revenue
         while offer_count < self.model.capacity:
             ranked_student_list[i][2].offers.append(self)
             i += 1
             offer_count += 1
     
     def waitlist(self):
+        # Students who did not yet receive offers are re-considered for admission
+        # by universities with remaining capacity
         available_students = []
         for student in self.model.agents_by_type[Student]:
             expected_revenue = min(student.wealth, self.tuition) + student.merit * self.prestige * self.model.donate
@@ -104,11 +117,14 @@ class University(ContinuousSpaceAgent):
 
 
     def update_prestige(self):
-        
+        # Universities update their tuition and prestige based on student enrollment
         merit_list = [student.merit for student in self.model.agents_by_type[Student] if student.decision == self]
-        if not merit_list:
+        # Prestige is re-calculated
+        if not merit_list: # This is necessary for universities with no acceptances
             self.prestige = max(self.prestige-0.05, 0.1)
         new_prestige = np.mean(merit_list)
+        # Universities with increased merit raise tuition and universities with
+        # lowered merit decrease tuition
         if self.prestige < new_prestige:
             self.tuition = min(self.tuition+0.05, 1)
         else:
@@ -118,4 +134,5 @@ class University(ContinuousSpaceAgent):
         self.position = (self.tuition, self.position[1])
 
     def reset(self):
+        # Universities reset their number of students enrolled
         self.acceptances = 0
