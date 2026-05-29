@@ -17,7 +17,11 @@ class Student(ContinuousSpaceAgent):
         super().__init__(space, model)
         self.position = position
         self.wealth = wealth
-        self.merit = merit
+        # Merit is fit to within the merit_window
+        ideal_min = wealth - (self.model.merit_window / 2)
+        actual_min = max(0, min(1 - self.model.merit_window, ideal_min))
+        self.merit = merit * self.model.merit_window + actual_min
+        
         self.offers = []
         self.decision = None
         self.label = 'S'
@@ -40,10 +44,10 @@ class Student(ContinuousSpaceAgent):
             # cancluate tuition based on their actual paid amount rather than
             # the university sticker price.
             if self.information:
-                real_tuition = min(self.wealth, offer.tuition)
+                perceived_tuition = min(self.wealth, offer.tuition)
             else:
-                real_tuition = offer.tuition
-            offer_utility = offer.prestige / (real_tuition / self.wealth)
+                perceived_tuition = offer.tuition
+            offer_utility = offer.prestige / (perceived_tuition / self.wealth)
             if offer_utility > best_offer[1]:
                 best_offer = (offer, offer_utility)
         
@@ -82,15 +86,16 @@ class University(ContinuousSpaceAgent):
         self.total_revenue = 0
 
     def offer(self):
-        # Universities send offers to the students with the highest expected revenue
+        # Universities send offers to the students with the highest incentive score
         ranked_student_list = []
         offer_count = 0
         # Student expected revenues are calculated
         for student in self.model.agents_by_type[Student]:
             expected_revenue = min(student.wealth, self.tuition) + student.merit * self.prestige * self.model.donate
-            ranked_student_list.append((expected_revenue, student.merit, student))
+            score = expected_revenue * self.model.incentive + student.merit * (1-self.model.incentive)
+            ranked_student_list.append((score, student.merit, student))
             
-        ranked_student_list.sort()
+        ranked_student_list.sort(reverse=True)
         i = 0
         # Until the capacity is reached, students are sent offers in order of
         # expected revenue
@@ -105,8 +110,9 @@ class University(ContinuousSpaceAgent):
         available_students = []
         for student in self.model.agents_by_type[Student]:
             expected_revenue = min(student.wealth, self.tuition) + student.merit * self.prestige * self.model.donate
-            available_students.append((expected_revenue, student.merit, student))
-        available_students.sort()
+            score = expected_revenue * self.model.incentive + student.merit * (1-self.model.incentive)
+            available_students.append((score, student.merit, student))
+        available_students.sort(reverse=True)
         offers = self.acceptances
         i = 0
         while offers < self.model.capacity:
@@ -122,17 +128,17 @@ class University(ContinuousSpaceAgent):
         # Prestige is re-calculated
         if not merit_list: # This is necessary for universities with no acceptances
             self.prestige = max(self.prestige-0.05, 0.1)
-        new_prestige = np.mean(merit_list)
-        # Universities with increased merit raise tuition and universities with
-        # lowered merit decrease tuition
-        if self.prestige < new_prestige:
+        else:
+            new_prestige = np.mean(merit_list)
+            self.prestige = self.prestige * 0.9 + new_prestige * 0.1
+        # University tuition is re-calculated based on the number of acceptances
+        if self.acceptances > self.model.capacity / self.model.university_count ** 2:
             self.tuition = min(self.tuition+0.05, 1)
         else:
-            self.tuition = max(self.tuition-0.1, 0.1)
-        if merit_list:
-            self.prestige = self.prestige * 0.75 + new_prestige * 0.25
+            self.tuition = max(self.tuition-0.05, 0.1)
         self.position = (self.tuition, self.position[1])
 
     def reset(self):
         # Universities reset their number of students enrolled
         self.acceptances = 0
+        self.total_revenue = 0

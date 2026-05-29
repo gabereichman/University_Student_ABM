@@ -1,5 +1,5 @@
 from model import UniversityRevenue
-from mesa.visualization import Slider, SolaraViz, make_space_component
+from mesa.visualization import Slider, SolaraViz, make_space_component, make_plot_component
 from mesa.visualization.components import AgentPortrayalStyle
 
 def agent_portrayal(agent):
@@ -27,7 +27,7 @@ model_params = {
     },
     "student_count": Slider(
         label="Number of Students",
-        value=100,
+        value=1000,
         min=10,
         max=1000,
         step=10,
@@ -48,14 +48,28 @@ model_params = {
     ),
     "capacity_prop": Slider(
         label="Capacity proportion",
-        value=0.5,
+        value=0.3,
         min=0.1,
+        max=1,
+        step=0.1
+    ),
+    "merit_window": Slider(
+        label="Wealth-Merit Independence",
+        value=1,
+        min=0,
+        max=1,
+        step=0.1
+    ),
+    "incentive": Slider(
+        label="Revenue Incentive Weight",
+        value=1,
+        min=0,
         max=1,
         step=0.1
     ),
     "information": {
         "type": "Select",
-        "value": "single",
+        "value": "No information",
         "values": ["No information", "Partial information", "Perfect information"],
         "label": "Student Financial Information"
     }
@@ -65,9 +79,18 @@ model = UniversityRevenue()
 
 page = SolaraViz(
     model,
-    components=[make_space_component(agent_portrayal=agent_portrayal, backend="matplotlib")],
+    components=[
+        # Vizualize the model itself
+        make_space_component(agent_portrayal=agent_portrayal, backend="matplotlib"),
+        # Vizualize merit and wealth stratification together
+        make_plot_component(["Merit_std", "Wealth_std"]),
+
+        make_plot_component(["Tuition_Prestige_Corr"]),
+
+        make_plot_component(["Total_Revenue"])
+
+        ],
     model_params=model_params,
     name="University Revenue Model",
 )
 page
-# I still need to add data-collection visualizations
